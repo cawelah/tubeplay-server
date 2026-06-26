@@ -117,11 +117,12 @@ async function streamYtDlp(videoId, req, res) {
 
     const getUrl = spawn('yt-dlp', [
       '-f', 'bestaudio/best',
-      '--get-url',
+      '-g',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      '--extractor-retries', '3',
+      '--extractor-retries', '5',
       '--no-warnings',
       '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=android,web;skip=webpage',
       url
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -143,7 +144,9 @@ async function streamYtDlp(videoId, req, res) {
     getUrl.on('close', (code) => {
       clearTimeout(timeout);
       if (code !== 0 || !audioUrl.trim()) {
-        return reject(new Error(`yt-dlp exit code ${code}: ${stderr.slice(0, 200)}`));
+        const errMsg = stderr.slice(0, 500) || 'sin stderr';
+        console.log(`yt-dlp error para ${videoId}: code=${code}, stderr=${errMsg}`);
+        return reject(new Error(`yt-dlp err: ${errMsg}`));
       }
       audioUrl = audioUrl.trim().split('\n')[0];
       console.log(`Stream URL obtenida para ${videoId}`);
