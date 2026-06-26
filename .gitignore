@@ -1,0 +1,8 @@
+node_modules/  
+.env  
+npm-debug.log  
+client/node_modules/  
+server/downloads/  
+start-all.bat  
+start-server.bat  
+start-client.bat 
