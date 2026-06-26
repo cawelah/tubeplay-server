@@ -114,8 +114,13 @@ async function streamYtDlp(videoId, req, res) {
   return new Promise((resolve, reject) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const proc = spawn('yt-dlp', [
-      '-f', 'bestaudio',
+      '-f', 'bestaudio[ext=m4a]/bestaudio',
       '--audio-format', 'mp3',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      '--extractor-retries', '3',
+      '--ignore-errors',
+      '--no-warnings',
+      '--no-check-certificate',
       '-o', '-',
       url
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -124,7 +129,7 @@ async function streamYtDlp(videoId, req, res) {
     const timeout = setTimeout(() => {
       proc.kill('SIGTERM');
       reject(new Error('Timeout yt-dlp'));
-    }, 20000);
+    }, 30000);
 
     proc.stdout.on('data', (chunk) => {
       if (!hasData) {
@@ -149,7 +154,8 @@ async function streamYtDlp(videoId, req, res) {
       reject(err);
     });
 
-    proc.stderr.on('data', () => {});
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
     req.on('close', () => {
       clearTimeout(timeout);
