@@ -24,6 +24,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+app.get('/', (req, res) => {
+  res.json({ app: 'TubePlay API', version: '1.0.0' });
+});
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/stream', require('./routes/stream'));
@@ -35,16 +39,13 @@ app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
 
 const PORT = process.env.PORT || 5000;
 
-const startServer = async () => {
-  const connected = await connectDB();
-  if (!connected) {
-    console.log('MongoDB no disponible - iniciando en modo sin base de datos');
-  } else {
-    console.log('MongoDB conectado correctamente');
-  }
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`TubePlay server corriendo en puerto ${PORT}`);
+// Primero arrancar el server, luego conectar DB en background
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`TubePlay server corriendo en puerto ${PORT}`);
+  connectDB().then(connected => {
+    if (connected) console.log('MongoDB conectado correctamente');
+    else console.log('MongoDB no disponible - modo sin base de datos');
+  }).catch(err => {
+    console.log('Error conectando MongoDB:', err.message);
   });
-};
-
-startServer();
+});
