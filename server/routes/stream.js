@@ -1,5 +1,6 @@
 const express = require('express');
 const { spawn } = require('child_process');
+const https = require('https');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { isMongoConnected } = require('../config/demoDb');
@@ -113,53 +114,65 @@ async function streamYtdlCore(videoId, req, res) {
 async function streamYtDlp(videoId, req, res) {
   return new Promise((resolve, reject) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const proc = spawn('yt-dlp', [
-      '-f', 'bestaudio[ext=m4a]/bestaudio',
-      '--audio-format', 'mp3',
+
+    const getUrl = spawn('yt-dlp', [
+      '-f', 'bestaudio/best',
+      '--get-url',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       '--extractor-retries', '3',
-      '--ignore-errors',
       '--no-warnings',
       '--no-check-certificate',
-      '-o', '-',
       url
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    let hasData = false;
+    let audioUrl = '';
+    let stderr = '';
     const timeout = setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error('Timeout yt-dlp'));
-    }, 30000);
+      getUrl.kill('SIGTERM');
+      reject(new Error('Timeout obteniendo URL'));
+    }, 15000);
 
-    proc.stdout.on('data', (chunk) => {
-      if (!hasData) {
-        hasData = true;
-        if (!res.headersSent) {
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.setHeader('Accept-Ranges', 'bytes');
-        }
-      }
-      res.write(chunk);
+    getUrl.stdout.on('data', (data) => {
+      audioUrl += data.toString();
     });
 
-    proc.stdout.on('end', () => {
+    getUrl.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    getUrl.on('close', (code) => {
       clearTimeout(timeout);
-      if (!hasData) return reject(new Error('Sin datos de yt-dlp'));
-      if (res.headersSent) { res.end(); resolve(); }
-      else reject(new Error('Sin envio de headers'));
+      if (code !== 0 || !audioUrl.trim()) {
+        return reject(new Error(`yt-dlp exit code ${code}: ${stderr.slice(0, 200)}`));
+      }
+      audioUrl = audioUrl.trim().split('\n')[0];
+      console.log(`Stream URL obtenida para ${videoId}`);
+
+      const https = require('https');
+      https.get(audioUrl, (audioRes) => {
+        if (audioRes.statusCode !== 200) {
+          return reject(new Error(`Audio source HTTP ${audioRes.statusCode}`));
+        }
+        res.setHeader('Content-Type', audioRes.headers['content-type'] || 'audio/mpeg');
+        res.setHeader('Accept-Ranges', 'bytes');
+        audioRes.pipe(res);
+        audioRes.on('end', () => {
+          if (res.headersSent) { res.end(); resolve(); }
+          else reject(new Error('Sin datos'));
+        });
+      }).on('error', (err) => {
+        reject(new Error(`HTTP get error: ${err.message}`));
+      });
     });
 
-    proc.on('error', (err) => {
+    getUrl.on('error', (err) => {
       clearTimeout(timeout);
       reject(err);
     });
 
-    let stderr = '';
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-
     req.on('close', () => {
       clearTimeout(timeout);
-      proc.kill('SIGTERM');
+      getUrl.kill('SIGTERM');
     });
   });
 }
