@@ -44,6 +44,14 @@ app.use('/api/downloads', require('./routes/downloads'));
 
 app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
 
+const { execSync } = require('child_process');
+try {
+  const ytver = execSync('yt-dlp --version', { timeout: 5000 }).toString().trim();
+  console.log(`yt-dlp version: ${ytver}`);
+} catch (e) {
+  console.log('yt-dlp no disponible');
+}
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, '0.0.0.0', () => {
