@@ -8,6 +8,13 @@ dotenv.config();
 
 const app = express();
 
+process.on('uncaughtException', (err) => {
+  console.log('UNCAUGHT EXCEPTION:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.log('UNHANDLED REJECTION:', reason);
+});
+
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',')
   : ['http://localhost:3000'];
@@ -39,8 +46,11 @@ app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
 
 const PORT = process.env.PORT || 5000;
 
-// Primero arrancar el server, luego conectar DB en background
-app.listen(PORT, '0.0.0.0', () => {
+console.log('STARTUP: Node version:', process.version);
+console.log('STARTUP: PID:', process.pid);
+console.log('STARTUP: PORT env:', PORT);
+
+app.listen(PORT, '::', () => {
   console.log(`TubePlay server corriendo en puerto ${PORT}`);
   connectDB().then(connected => {
     if (connected) console.log('MongoDB conectado correctamente');
