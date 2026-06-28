@@ -50,7 +50,7 @@ router.post('/login', async (req, res) => {
 
     if (!isMongoConnected()) {
       const user = demoDb.users.find(u => u.email === email);
-      if (!user) {
+      if (!user || user.password !== password) {
         return res.status(400).json({ error: 'Credenciales inválidas' });
       }
       const token = 'demo_' + Buffer.from(JSON.stringify({ id: user._id })).toString('base64');

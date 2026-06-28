@@ -1,9 +1,19 @@
 const express = require('express');
 const { spawn } = require('child_process');
+const path = require('path');
 const https = require('https');
+const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { isMongoConnected } = require('../config/demoDb');
+
+const ytDlpBinary = (() => {
+  const local = path.join(__dirname, '..', 'yt-dlp.exe');
+  if (fs.existsSync(local)) return local;
+  const local2 = path.join(__dirname, '..', 'yt-dlp');
+  if (fs.existsSync(local2)) return local2;
+  return 'yt-dlp';
+})();
 
 const router = express.Router();
 
@@ -115,7 +125,7 @@ async function streamYtDlp(videoId, req, res) {
   return new Promise((resolve, reject) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-    const getUrl = spawn('yt-dlp', [
+    const getUrl = spawn(ytDlpBinary, [
       '-f', 'bestaudio/best',
       '-g',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

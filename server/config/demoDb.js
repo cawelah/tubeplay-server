@@ -1,6 +1,9 @@
 // Almacenamiento en memoria cuando MongoDB no está disponible
 const demoDb = {
-  users: [],
+  users: [
+    { _id: 'demo_user_1', username: 'DemoUser', email: 'demo@tubeplay.app', password: 'demo123' },
+    { _id: 'demo_user_2', username: 'Test', email: 'test@test.com', password: 'test123' },
+  ],
   playlists: [],
   likedSongs: [],
   downloads: []
