@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiDownload, FiTrash2, FiPlay, FiArrowLeft } from 'react-icons/fi';
+import { FiDownload, FiTrash2, FiPlay, FiArrowLeft, FiSearch } from 'react-icons/fi';
 import { usePlayer } from '../context/PlayerContext';
 import { getDownloads, deleteDownload, requestDownload } from '../api/axios';
 import { Link } from 'react-router-dom';

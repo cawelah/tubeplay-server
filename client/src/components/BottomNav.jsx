@@ -35,9 +35,10 @@ const BottomNav = () => {
   };
 
   const tabs = [
-    { path: '/', icon: FiSearch, label: 'Buscar' },
-    { path: '/liked', icon: FiHeart, label: 'Favoritos' },
-    { path: '/downloads', icon: FiDownload, label: 'Descargas' }
+    { path: '/', icon: FiHome, label: 'Home' },
+    { path: '/search', icon: FiSearch, label: 'Search' },
+    { path: '/liked', icon: FiHeart, label: 'Favorites' },
+    { path: '/downloads', icon: FiDownload, label: 'Downloads' }
   ];
 
   return (

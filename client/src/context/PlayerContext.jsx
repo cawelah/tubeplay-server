@@ -109,7 +109,7 @@ export const PlayerProvider = ({ children }) => {
     const onE = () => {
       if (repeatRef.current === 'one') {
         a.currentTime = 0;
-        a.play().catch(() => {});
+      a.play().catch(e => { console.error('Playback error:', e.message, 'URL:', a.src); });
       } else {
         nextSongRef.current();
       }
@@ -176,7 +176,7 @@ export const PlayerProvider = ({ children }) => {
       const a = audioRef.current;
       a.src = streamSong(song.videoId);
       a.currentTime = 0;
-      a.play().catch(() => {});
+      a.play().catch(e => console.error('Audio play error:', e.message, 'Source:', a.src));
     }
   }, [stopDemo, startDemo]);
 

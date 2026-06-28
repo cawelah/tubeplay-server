@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import BottomNav from './components/BottomNav';
+import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import NowPlaying from './components/NowPlaying';
+import Home from './components/Home';
 import Search from './components/Search';
 import PlaylistView from './components/PlaylistView';
 import LikedSongs from './components/LikedSongs';
@@ -33,18 +35,20 @@ function App() {
 
   return (
     <PhoneFrame>
-      <div className="app-container">
-        {user && <BottomNav />}
+      <div className={`app-container ${user ? 'app-authenticated' : ''}`}>
+        {user && <Sidebar />}
         <main className={`main-content ${!user ? 'no-nav' : ''}`}>
           <Routes>
             <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
             <Route path="/register" element={user ? <Navigate to="/" /> : <Register />} />
-            <Route path="/" element={<ProtectedRoute><Search /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
             <Route path="/playlist/:id" element={<ProtectedRoute><PlaylistView /></ProtectedRoute>} />
             <Route path="/liked" element={<ProtectedRoute><LikedSongs /></ProtectedRoute>} />
             <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
           </Routes>
         </main>
+        {user && <BottomNav />}
         {user && <PlayerBar onExpand={() => setShowNowPlaying(true)} />}
         {user && showNowPlaying && <NowPlaying onClose={() => setShowNowPlaying(false)} />}
       </div>

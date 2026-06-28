@@ -7,8 +7,8 @@ import { PlayerProvider } from './context/PlayerContext';
 import './styles/global.css';
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(r => r.unregister());
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
 

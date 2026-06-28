@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TubePlay</string>
+    <string name="title_activity_main">TubePlay</string>
+    <string name="package_name">com.tubeplay.app</string>
+    <string name="custom_url_scheme">com.tubeplay.app</string>
+</resources>

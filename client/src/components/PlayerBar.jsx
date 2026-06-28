@@ -5,11 +5,6 @@ import { usePlayer } from '../context/PlayerContext';
 const PlayerBar = ({ onExpand }) => {
   const { currentSong, isPlaying, progress, duration, togglePlay, nextSong, prevSong, seekTo } = usePlayer();
 
-  const formatTime = (s) => {
-    if (!s) return '0:00';
-    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-  };
-
   if (!currentSong) return null;
 
   const pct = duration ? (progress / duration) * 100 : 0;
@@ -17,9 +12,12 @@ const PlayerBar = ({ onExpand }) => {
   return (
     <div className="player-bar">
       <div className="player-bar-progress-wrap">
+        <div className="player-bar-progress-track">
+          <div className="player-bar-progress-fill" style={{ width: `${pct}%` }} />
+        </div>
         <input
           type="range"
-          className="player-bar-progress"
+          className="player-bar-progress-input"
           min="0"
           max="100"
           value={pct}
@@ -28,12 +26,14 @@ const PlayerBar = ({ onExpand }) => {
         />
       </div>
       <div className="player-bar-content" onClick={onExpand}>
-        <img
-          src={currentSong.thumbnail}
-          alt=""
-          className="player-bar-img"
-          onError={e => { e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23333" width="48" height="48"/><text x="24" y="30" text-anchor="middle" fill="%231DB954" font-size="20">♪</text></svg>'; }}
-        />
+        <div className={`player-bar-img-wrap ${isPlaying ? 'player-bar-img-pulse' : ''}`}>
+          <img
+            src={currentSong.thumbnail}
+            alt=""
+            className="player-bar-img"
+            onError={e => { e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23333" width="48" height="48"/><text x="24" y="30" text-anchor="middle" fill="%231DB954" font-size="20">♪</text></svg>'; }}
+          />
+        </div>
         <div className="player-bar-info">
           <p className="player-bar-title">{currentSong.title}</p>
           <p className="player-bar-artist">{currentSong.artist}</p>
