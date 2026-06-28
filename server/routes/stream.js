@@ -1,9 +1,10 @@
 const express = require('express');
 const path = require('path');
-const https = require('https');
-const http = require('http');
+const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+const https = require('https');
+const http = require('http');
 const User = require('../models/User');
 const { isMongoConnected } = require('../config/demoDb');
 
@@ -27,6 +28,14 @@ const authQuery = async (req, res, next) => {
   }
 };
 
+function findYtDlp() {
+  for (const name of ['./yt-dlp.exe', './yt-dlp']) {
+    if (fs.existsSync(name)) return name;
+  }
+  try { execSync('yt-dlp --version', { stdio: 'pipe' }); return 'yt-dlp'; }
+  catch { return null; }
+}
+
 router.get('/:videoId', authQuery, async (req, res) => {
   try {
     const { videoId } = req.params;
@@ -35,25 +44,78 @@ router.get('/:videoId', authQuery, async (req, res) => {
       return sendDemoAudio(res);
     }
 
+    const ytDlpBin = findYtDlp();
+    if (ytDlpBin) {
+      try {
+        await streamYtDlp(ytDlpBin, videoId, req, res);
+        return;
+      } catch (e) {
+        console.error('yt-dlp error:', e.message);
+      }
+    }
+
     try {
       await streamYtdlCore(videoId, req, res);
       return;
     } catch (e) {
-      console.log(`ytdl-core falló: ${e.message}`);
+      console.error('ytdl-core error:', e.message);
     }
 
     if (!res.headersSent) {
-      res.status(503).json({ error: 'No se pudo reproducir. Intenta de nuevo.' });
+      res.status(503).json({ error: 'No se pudo reproducir esta canción.' });
     }
   } catch (error) {
-    console.error('Stream error general:', error.message);
+    console.error('Stream error:', error.message);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Error al reproducir' });
     }
   }
 });
 
-async function streamYtdlCore(videoId, req, res) {
+function streamYtDlp(bin, videoId, req, res) {
+  return new Promise((resolve, reject) => {
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const proc = spawn(bin, [
+      '--extractor-args', 'youtube:player_client=android',
+      '--get-url',
+      '--no-warnings',
+      url
+    ], { timeout: 30000, windowsHide: true });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0 || !stdout.trim()) {
+        return reject(new Error(stderr.trim() || `Exit code ${code}`));
+      }
+      const streamUrl = stdout.trim().split('\n')[0];
+      if (!streamUrl || !streamUrl.startsWith('http')) {
+        return reject(new Error('URL inválida'));
+      }
+
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'no-cache');
+
+      const mod = streamUrl.startsWith('https') ? https : http;
+      mod.get(streamUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (proxyRes) => {
+        if (proxyRes.statusCode !== 200) {
+          proxyRes.resume();
+          return reject(new Error(`YouTube respondió ${proxyRes.statusCode}`));
+        }
+        proxyRes.pipe(res);
+      }).on('error', reject);
+    });
+
+    req.on('close', () => { try { proc.kill(); } catch {} });
+  });
+}
+
+function streamYtdlCore(videoId, req, res) {
   return new Promise((resolve, reject) => {
     try {
       const ytdl = require('ytdl-core');
@@ -68,7 +130,7 @@ async function streamYtdlCore(videoId, req, res) {
         highWaterMark: 1 << 25,
         requestOptions: {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
           },
           httpsAgent: agent,
@@ -76,8 +138,8 @@ async function streamYtdlCore(videoId, req, res) {
       });
 
       let hasData = false;
-      let timeout = setTimeout(() => {
-        if (!hasData) { stream.destroy(); reject(new Error('Timeout')); }
+      const timeout = setTimeout(() => {
+        if (!hasData) { stream.destroy(); reject(new Error('Timeout ytdl-core')); }
       }, 20000);
 
       stream.on('info', (info, format) => {
