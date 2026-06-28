@@ -1,5 +1,5 @@
 const express = require('express');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
@@ -12,6 +12,14 @@ const ytDlpBinary = (() => {
   if (fs.existsSync(local)) return local;
   const local2 = path.join(__dirname, '..', 'yt-dlp');
   if (fs.existsSync(local2)) return local2;
+  try {
+    execSync('yt-dlp --version', { stdio: 'pipe' });
+    return 'yt-dlp';
+  } catch {}
+  try {
+    execSync('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp', { stdio: 'pipe', shell: true, timeout: 15000 });
+    return '/usr/local/bin/yt-dlp';
+  } catch {}
   return 'yt-dlp';
 })();
 
