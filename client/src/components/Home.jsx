@@ -4,13 +4,15 @@ import { usePlayer } from '../context/PlayerContext';
 import { searchSongs } from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 
-const categories = [
-  { label: 'Trending', query: 'trending music' },
-  { label: 'Pop', query: 'pop music' },
-  { label: 'Hits 2024', query: 'hits 2024' },
-  { label: 'Rock', query: 'rock music' },
-  { label: 'Hip Hop', query: 'hip hop' },
-  { label: 'Electronic', query: 'electronic music' },
+const moodSections = [
+  { label: 'Trending now', query: 'trending music' },
+  { label: 'Recommended for you', query: 'popular music' },
+  { label: 'New releases', query: 'new music this year' },
+  { label: 'Pop hits', query: 'pop hits' },
+  { label: 'Chill vibes', query: 'chill mix' },
+  { label: 'Workout energy', query: 'workout music' },
+  { label: 'Latin party', query: 'latin hits' },
+  { label: 'Hip hop & rap', query: 'hip hop rap' },
 ];
 
 const quickColors = [
@@ -33,7 +35,7 @@ const Home = () => {
     setLoading(true);
     try {
       const results = await Promise.all(
-        categories.slice(0, 4).map(async (cat) => {
+        moodSections.map(async (cat) => {
           try {
             const res = await searchSongs(cat.query, 8);
             return { ...cat, songs: res.data.results || [] };
@@ -87,11 +89,11 @@ const Home = () => {
       </div>
 
       <div className="home-quick-access">
-        {categories.slice(0, 6).map((cat, i) => (
+        {moodSections.slice(0, 6).map((cat, i) => (
           <button
             key={i}
             className="home-quick-card"
-            style={{ background: quickColors[i] }}
+            style={{ background: quickColors[i % quickColors.length] }}
             onClick={() => {
               const section = sections.find(s => s.label === cat.label);
               if (section?.songs?.[0]) {
@@ -110,6 +112,7 @@ const Home = () => {
         <div className="home-section">
           <div className="home-section-header">
             <h2 className="home-section-title">Recently played</h2>
+            <button className="home-section-seeall" onClick={() => {/* clear recent */ localStorage.removeItem('recentlyPlayed'); setRecent([]); }}>Clear</button>
           </div>
           <div className="home-section-row">
             {recent.slice(0, 6).map((song) => (
@@ -129,7 +132,7 @@ const Home = () => {
 
       {loading ? (
         <div className="home-sections">
-          {[1, 2].map(i => (
+          {[1, 2, 3].map(i => (
             <div key={i} className="home-section">
               <div className="home-section-skeleton-title" />
               <div className="home-section-row">

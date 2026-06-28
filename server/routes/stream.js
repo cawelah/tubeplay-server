@@ -1,27 +1,11 @@
 const express = require('express');
-const { spawn, execSync } = require('child_process');
 const path = require('path');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { isMongoConnected } = require('../config/demoDb');
-
-const ytDlpBinary = (() => {
-  const local = path.join(__dirname, '..', 'yt-dlp.exe');
-  if (fs.existsSync(local)) return local;
-  const local2 = path.join(__dirname, '..', 'yt-dlp');
-  if (fs.existsSync(local2)) return local2;
-  try {
-    execSync('yt-dlp --version', { stdio: 'pipe' });
-    return 'yt-dlp';
-  } catch {}
-  try {
-    execSync('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp', { stdio: 'pipe', shell: true, timeout: 15000 });
-    return '/usr/local/bin/yt-dlp';
-  } catch {}
-  return 'yt-dlp';
-})();
 
 const router = express.Router();
 
@@ -51,29 +35,16 @@ router.get('/:videoId', authQuery, async (req, res) => {
       return sendDemoAudio(res);
     }
 
-    // 1) Intentar con yt-dlp (más confiable)
     try {
-      console.log(`Stream: intentando con yt-dlp para ${videoId}`);
-      await streamYtDlp(videoId, req, res);
-      return;
-    } catch (e) {
-      console.log(`yt-dlp falló: ${e.message}`);
-    }
-
-    // 2) Fallback a ytdl-core
-    try {
-      console.log(`Stream: intentando con ytdl-core para ${videoId}`);
       await streamYtdlCore(videoId, req, res);
       return;
     } catch (e) {
       console.log(`ytdl-core falló: ${e.message}`);
     }
 
-    // 3) Error final
     if (!res.headersSent) {
-      res.status(503).json({ error: 'No se pudo reproducir. Asegúrate de tener yt-dlp instalado.' });
+      res.status(503).json({ error: 'No se pudo reproducir. Intenta de nuevo.' });
     }
-
   } catch (error) {
     console.error('Stream error general:', error.message);
     if (!res.headersSent) {
@@ -86,115 +57,53 @@ async function streamYtdlCore(videoId, req, res) {
   return new Promise((resolve, reject) => {
     try {
       const ytdl = require('ytdl-core');
+      const agent = new https.Agent({
+        rejectUnauthorized: false,
+        keepAlive: true,
+      });
+
       const stream = ytdl(videoId, {
         quality: 'highestaudio',
         filter: 'audioonly',
-        highWaterMark: 1 << 25
+        highWaterMark: 1 << 25,
+        requestOptions: {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          httpsAgent: agent,
+        },
       });
 
       let hasData = false;
+      let timeout = setTimeout(() => {
+        if (!hasData) { stream.destroy(); reject(new Error('Timeout')); }
+      }, 20000);
 
-      stream.on('info', () => { hasData = true; });
-
-      stream.on('progress', () => {
-        if (!hasData) hasData = true;
-      });
-
-      stream.on('response', () => {
-        res.setHeader('Content-Type', 'audio/mpeg');
+      stream.on('info', (info, format) => {
+        hasData = true;
+        const mime = format?.mimeType || 'audio/mpeg';
+        res.setHeader('Content-Type', mime.includes('audio') ? mime : 'audio/mpeg');
         res.setHeader('Accept-Ranges', 'bytes');
         stream.pipe(res);
       });
 
       stream.on('error', (err) => {
+        clearTimeout(timeout);
         stream.destroy();
         reject(err);
       });
 
       stream.on('end', () => {
-        if (!hasData) reject(new Error('Sin datos de ytdl-core'));
-        else if (!res.headersSent) reject(new Error('Sin envio de headers'));
+        clearTimeout(timeout);
+        if (!res.headersSent) reject(new Error('Sin datos'));
         else resolve();
       });
 
-      req.on('close', () => stream.destroy());
-
-      setTimeout(() => {
-        if (!hasData) { stream.destroy(); reject(new Error('Timeout ytdl-core')); }
-      }, 12000);
-
+      req.on('close', () => { clearTimeout(timeout); stream.destroy(); });
     } catch (err) {
       reject(err);
     }
-  });
-}
-
-async function streamYtDlp(videoId, req, res) {
-  return new Promise((resolve, reject) => {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-
-    const getUrl = spawn(ytDlpBinary, [
-      '-f', 'bestaudio/best',
-      '-g',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      '--extractor-retries', '5',
-      '--no-warnings',
-      '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=android,web;skip=webpage',
-      url
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-
-    let audioUrl = '';
-    let stderr = '';
-    const timeout = setTimeout(() => {
-      getUrl.kill('SIGTERM');
-      reject(new Error('Timeout obteniendo URL'));
-    }, 15000);
-
-    getUrl.stdout.on('data', (data) => {
-      audioUrl += data.toString();
-    });
-
-    getUrl.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    getUrl.on('close', (code) => {
-      clearTimeout(timeout);
-      if (code !== 0 || !audioUrl.trim()) {
-        const errMsg = stderr.slice(0, 500) || 'sin stderr';
-        console.log(`yt-dlp error para ${videoId}: code=${code}, stderr=${errMsg}`);
-        return reject(new Error(`yt-dlp err: ${errMsg}`));
-      }
-      audioUrl = audioUrl.trim().split('\n')[0];
-      console.log(`Stream URL obtenida para ${videoId}`);
-
-      const https = require('https');
-      https.get(audioUrl, (audioRes) => {
-        if (audioRes.statusCode !== 200) {
-          return reject(new Error(`Audio source HTTP ${audioRes.statusCode}`));
-        }
-        res.setHeader('Content-Type', audioRes.headers['content-type'] || 'audio/mpeg');
-        res.setHeader('Accept-Ranges', 'bytes');
-        audioRes.pipe(res);
-        audioRes.on('end', () => {
-          if (res.headersSent) { res.end(); resolve(); }
-          else reject(new Error('Sin datos'));
-        });
-      }).on('error', (err) => {
-        reject(new Error(`HTTP get error: ${err.message}`));
-      });
-    });
-
-    getUrl.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-
-    req.on('close', () => {
-      clearTimeout(timeout);
-      getUrl.kill('SIGTERM');
-    });
   });
 }
 
